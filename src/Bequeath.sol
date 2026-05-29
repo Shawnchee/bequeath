@@ -79,6 +79,7 @@ contract Bequeath is BaseHook {
     event PayoutCollected(bytes32 indexed positionKey, address indexed to, uint128 amount);
     event Heartbeat(bytes32 indexed positionKey, uint64 timestamp);
     event Claimed(bytes32 indexed positionKey, address indexed beneficiary);
+    event BeneficiaryUpdated(bytes32 indexed positionKey, address indexed newBeneficiary);
     event EndowmentRevoked(bytes32 indexed positionKey);
 
     // ───────────────────────────── Errors ────────────────────────────
@@ -271,6 +272,22 @@ contract Bequeath is BaseHook {
         e.lastHeartbeat = uint64(block.timestamp);
         // active stays true so the heir can keep collecting
         emit Claimed(positionKey, msg.sender);
+    }
+
+    /// @notice Current owner re-designates the beneficiary on an existing position.
+    /// @dev Enables succession: an heir who claimed the stream can name the next heir, so the
+    /// endowment can pass down generations. Without this, `beneficiary` is frozen at the value
+    /// set in setEndowment (and left stale pointing at the heir themselves after a claim).
+    /// Re-designating counts as owner activity, so it refreshes the heartbeat.
+    function setBeneficiary(bytes32 positionKey, address newBeneficiary) external {
+        if (newBeneficiary == address(0)) revert ZeroAddress();
+        Endowment storage e = endowments[positionKey];
+        if (!e.active) revert NoActiveEndowment();
+        if (e.owner != msg.sender) revert NotOwner();
+
+        e.beneficiary = newBeneficiary;
+        e.lastHeartbeat = uint64(block.timestamp);
+        emit BeneficiaryUpdated(positionKey, newBeneficiary);
     }
 
     /// @notice Owner revokes the endowment entirely. Buffer is refunded to owner.
