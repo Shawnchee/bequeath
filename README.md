@@ -39,43 +39,42 @@ Bequeath solves both at the protocol layer:
 
 Prereqs: [Foundry](https://book.getfoundry.sh/getting-started/installation).
 
-The cleanest path is to start from the [official v4-template](https://github.com/uniswapfoundation/v4-template), which already wires up every submodule and remapping this hook depends on, then drop in `src/Bequeath.sol` and `test/Bequeath.t.sol`.
+This repo wires its own dependencies as git submodules — forge-std and OpenZeppelin `uniswap-hooks`
+(which pulls v4-core, v4-periphery, openzeppelin-contracts, and solmate). Clone with submodules and test:
 
 ```bash
-# Start from the v4-template (gets all submodules right)
-git clone --recurse-submodules https://github.com/uniswapfoundation/v4-template.git bequeath
+git clone --recurse-submodules <this-repo-url> bequeath
 cd bequeath
-
-# Drop in Bequeath
-cp /path/to/Bequeath/src/Bequeath.sol src/
-cp /path/to/Bequeath/test/Bequeath.t.sol test/
-
-# Build & test
-forge build
 forge test -vv
 ```
 
-If you'd rather build from scratch (matching the verified remappings in `remappings.txt`):
+Already cloned without `--recurse-submodules`? Pull them and test:
 
 ```bash
-forge init bequeath && cd bequeath
-forge install foundry-rs/forge-std --no-commit
-forge install OpenZeppelin/uniswap-hooks --no-commit
-# uniswap-hooks pulls v4-core, v4-periphery, openzeppelin-contracts, solmate as nested submodules
 git submodule update --init --recursive
-# copy in foundry.toml + remappings.txt from this repo, then src/ and test/
-forge build
 forge test -vv
 ```
 
-> **Verified clean compile**: this code was compiled with solc 0.8.30 (cancun EVM) against the real v4-core, v4-periphery, OpenZeppelin uniswap-hooks, OZ contracts, and forge-std libraries. Both `src/Bequeath.sol` (47 ABI entries) and `test/Bequeath.t.sol` build with 0 errors and 0 warnings.
+Run the generational-saga demo on its own — this is the shoot script for the video:
+
+```bash
+forge test --match-test test_demo_pensionThatOutlivesYou -vvv
+```
+
+> **Verified locally**: builds with **solc 0.8.26** (cancun EVM — the version v4-core pins) against
+> the real v4-core, v4-periphery, OpenZeppelin uniswap-hooks, OZ contracts, and forge-std.
+> **22 tests pass, 0 failed**: 18 API unit tests, 3 live-`PoolManager` integration tests, and the
+> 1 generational-saga demo. See [SECURITY.md](SECURITY.md) for the threat model and known MVP boundaries.
 
 ## Architecture
 
 | Component | What it does |
 |---|---|
-| `src/Bequeath.sol` | The v4 hook. Per-position `Endowment` struct, annuity buffer accumulation via `afterSwap`, monthly payout, heartbeat-based inheritance |
-| `test/Bequeath.t.sol` | Unit tests: endowment setup, buffer deposit, monthly payout cadence and smoothing, heartbeat refresh, inheritance claim, beneficiary collection after claim |
+| `src/Bequeath.sol` | The v4 hook. Per-position `Endowment` struct, annuity buffer accrual via `afterSwap`, monthly payout, heartbeat-based inheritance, `setBeneficiary` succession |
+| `test/Bequeath.t.sol` | API unit tests: endowment setup, buffer deposit, monthly payout cadence and smoothing, heartbeat refresh, inheritance claim, beneficiary collection after claim |
+| `test/BequeathIntegration.t.sol` | Live-`PoolManager` integration: real swaps accrue the buffer via `afterSwap`, real liquidity events refresh the heartbeat, swaps never brick the pool |
+| `test/BequeathDemo.t.sol` | The demo shoot script: one position across three generations (retiree → spouse → daughter) with narrated `console2` output |
+| `SECURITY.md` | Self-audit against the v4 hook threat model — checklist, findings, risk score, MVP boundaries |
 
 ### Hook permissions used
 
